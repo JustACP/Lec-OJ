@@ -17,7 +17,7 @@ import (
 type RunResult struct {
 	Output    string  `json:"output"`
 	Time      float64 `json:"time"`
-	Memory    float64 `json:"memory"`
+	Memory    string  `json:"memory"`
 	Exception string  `json:"exception"`
 	Number    int     `json:"number"`
 }
@@ -38,6 +38,7 @@ func saveCode(code, language string) (string, error) {
 	language = getPrefix(language)
 	filename := fmt.Sprintf("%s.%s", "main1", language)
 	path := filepath.Join("./", filename)
+	path += "go"
 	err := os.WriteFile(path, []byte(code), 0644)
 	if err != nil {
 		return "", err
@@ -49,9 +50,6 @@ func compile(path, language string) (*exec.Cmd, error) {
 	switch language {
 	case "go":
 		cmd := exec.Command("go", "build", path)
-		return cmd, cmd.Run()
-	case "c++":
-		cmd := exec.Command("g++", "main", path, "-o")
 		return cmd, cmd.Run()
 	}
 	return nil, fmt.Errorf("语言类型错误")
@@ -103,30 +101,25 @@ func run(path string, input, language string) (string, float64, error) {
 	return string(output), elapsed.Seconds(), nil
 }
 
-func getUsage(pid int) (float64, error) {
-	cmd := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "%cpu,%mem")
+func getUsage(pid int) (string, error) {
+	cmd := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "rss=")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
-		return 0, err
+		return "", err
 	}
-	output := strings.Split(strings.TrimSpace(stdout.String()), "\n")
-	if len(output) < 2 {
-		return 0, fmt.Errorf("cannot get usage for pid %d", pid)
-	}
-	values := strings.Fields(output[1])
-	if len(values) < 2 {
-		return 0, fmt.Errorf("cannot get usage for pid %d", pid)
-	}
-	_, err := strconv.ParseFloat(values[0], 64)
-	if err != nil {
-		return 0, fmt.Errorf("cannot parse CPU usage for pid %d: %v", pid, err)
-	}
-	mem, err := strconv.ParseFloat(values[1], 64)
-	if err != nil {
-		return 0, fmt.Errorf("cannot parse memory usage for pid %d: %v", pid, err)
-	}
-	return mem, nil
+	str := string(stdout.Bytes())
+	str, _ = strings.CutSuffix(str, "\n")
+	return str, nil
+	//if len(output) < 2 {
+	//	return 0, fmt.Errorf("cannot get usage for pid %d", pid)
+	//}
+	//values := strings.Fields(output[1])
+	//mem, err := strconv.ParseFloat(values[1], 64)
+	//if err != nil {
+	//	return 0, fmt.Errorf("cannot parse memory usage for pid %d: %v", pid, err)
+	//}
+	//return mem, nil
 }
 
 func runCode(path, input, language string) (*RunResult, error) {
@@ -168,7 +161,7 @@ func pythonJudgeMent(vo Entity.ReceiveCodeVo) (int, interface{}) {
 }
 
 func execPy(path string, input string) RunResult {
-	cmd := exec.Command("py", path)
+	cmd := exec.Command("python3", path)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return RunResult{Exception: err.Error()}
@@ -188,6 +181,7 @@ func execPy(path string, input string) RunResult {
 	if err := cmd.Start(); err != nil {
 		return RunResult{Exception: err.Error()}
 	}
+	memory, _ := getUsage(cmd.Process.Pid)
 	// 将输入数据写入进程的stdin
 	_, _ = io.WriteString(stdin, input)
 	_ = stdin.Close()
@@ -208,7 +202,7 @@ func execPy(path string, input string) RunResult {
 	result := RunResult{
 		Output: string(output),
 		Time:   elapsed.Seconds(),
-		Memory: 0,
+		Memory: memory,
 	}
 	return result
 }
