@@ -5,20 +5,22 @@ import (
 	"fmt"
 	"io"
 	"oj/Entity"
-	"oj/utils"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type RunResult struct {
-	Status string  `json:"status"`
-	Output string  `json:"output"`
-	Time   float64 `json:"time"`
-	Memory float64 `json:"memory"`
+	Status    string  `json:"status"`
+	Output    string  `json:"output"`
+	Time      float64 `json:"time"`
+	Memory    float64 `json:"memory"`
+	Exception string  `json:"exception"`
+	Number    int     `json:"number"`
 }
 
 func getPrefix(language string) string {
@@ -54,6 +56,7 @@ func compile(path, language string) (*exec.Cmd, error) {
 		cmd := exec.Command("g++", "main", path, "-o")
 		return cmd, cmd.Run()
 	}
+	return nil, fmt.Errorf("语言类型错误")
 }
 func run(path string, input, language string) (string, float64, error) {
 
@@ -158,82 +161,94 @@ func Judge(vo Entity.ReceiveCodeVo) (int, interface{}) {
 func pythonJudgeMent(vo Entity.ReceiveCodeVo) (int, interface{}) {
 	path, err := saveCode(vo.Code, vo.Language)
 	if err != nil {
-		return 500, err
+		return Entity.Response{}.Fail(err.Error())
 	}
 	ans, err := runPython(path, vo.TestPoints)
 	if err != nil {
-		return 500, err
+		return Entity.Response{}.Fail(err.Error())
 	}
-	return 200, ans
+	return Entity.Response{}.Success(ans)
+}
+func execPy(path string, input string) RunResult {
+	cmd := exec.Command("py", path)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return RunResult{Exception: err.Error()}
+	}
+	// 使用管道捕获进程的输出数据。
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return RunResult{Exception: err.Error()}
+	}
+	// 启动流程。
+	start := time.Now()
+	if err := cmd.Start(); err != nil {
+		return RunResult{Exception: err.Error()}
+	}
+	// 将输入数据写入进程的stdin
+	io.WriteString(stdin, input)
+	stdin.Close()
+	elapsed := time.Since(start)
+	output, err := io.ReadAll(stdout)
+	err = cmd.Wait()
+	if err != nil {
+		return RunResult{Exception: err.Error()}
+	}
+	result := RunResult{
+		Status: "correct",
+		Output: string(output),
+		Time:   elapsed.Seconds(),
+		Memory: 0,
+	}
+	return result
 }
 
 func runPython(path string, input []string) (interface{}, error) {
 	var res Entity.Response
-	cmd := exec.Command("pythton", path)
-	for _, val := range input {
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			return "", err
-		}
-		// 使用管道捕获进程的输出数据。
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			return "", err
-		}
-		// 启动流程。
-		start := time.Now()
-		if err := cmd.Start(); err != nil {
-			return "", err
-		}
-
-		// 将输入数据写入进程的stdin
-		io.WriteString(stdin, val)
-		stdin.Close()
-		elapsed := time.Since(start)
-		output, err := io.ReadAll(stdout)
-		err = cmd.Wait()
-		if err != nil {
-			return "", err
-		}
-		res.Code = 200
-		res.Data = RunResult{
-			Status: "correct",
-			Output: string(output),
-			Time:   elapsed.Seconds(),
-			Memory: 0,
-		}
+	var ans []RunResult
+	var wg sync.WaitGroup
+	for num, val := range input {
+		val := val
+		wg.Add(1)
+		num := num
+		go func(wg *sync.WaitGroup) {
+			defer wg.Done()
+			res := execPy(path, val)
+			res.Number = num
+			ans = append(ans, res)
+		}(&wg)
 	}
+	wg.Wait()
+	res.Data = ans
+	return res, nil
 }
 
 func goJudgeMent(vo Entity.ReceiveCodeVo) (int, interface{}) {
-	var response Entity.Response
-	response.Code = 200
 	var ans []RunResult
 	path, err := saveCode(vo.Code, vo.Language)
 
 	if err != nil {
-		return utils.Fail(err.Error())
+		return Entity.Response{}.Fail(err.Error())
 	}
 
 	// 编译代码
 	cmd, err := compile(path, vo.Language)
 	if err != nil {
-		return utils.Fail(err.Error())
+		return Entity.Response{}.Fail(err.Error())
 	}
 	// 跑每一个数据点
 
 	for _, val := range vo.TestPoints {
 		code, err := runCode(cmd.Path, val, getPrefix(vo.Language))
 		if err != nil {
-			return utils.Fail(err.Error())
+			return Entity.Response{}.Fail(err.Error())
 		}
 		ans = append(ans, *code)
 	}
-	response.Data = ans
-	return response.Code, response
+	return Entity.Response{}.Success(ans)
 
 }
 
 func cPlusJuegeMent(vo Entity.ReceiveCodeVo) (int, interface{}) {
-
+	return 0, nil
 }

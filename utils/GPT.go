@@ -50,7 +50,7 @@ func getMessage(message1 string) string {
 	by, _ := json.Marshal(&reqe)
 	fmt.Println(string(by))
 	req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(by))
-	req.Header.Set("Authorization", "Bearer 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")
+	req.Header.Set("Authorization", "Bearer ")
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
