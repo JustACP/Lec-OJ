@@ -15,7 +15,6 @@ import (
 )
 
 type RunResult struct {
-	Status    string  `json:"status"`
 	Output    string  `json:"output"`
 	Time      float64 `json:"time"`
 	Memory    float64 `json:"memory"`
@@ -31,7 +30,6 @@ func getPrefix(language string) string {
 		return "py"
 	case "java":
 		return "java"
-
 	}
 	return ""
 }
@@ -138,7 +136,6 @@ func runCode(path, input, language string) (*RunResult, error) {
 		return nil, err
 	}
 	result := &RunResult{
-		Status: "correct",
 		Output: ans,
 		Time:   seconds,
 	}
@@ -169,9 +166,15 @@ func pythonJudgeMent(vo Entity.ReceiveCodeVo) (int, interface{}) {
 	}
 	return Entity.Response{}.Success(ans)
 }
+
 func execPy(path string, input string) RunResult {
 	cmd := exec.Command("py", path)
 	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return RunResult{Exception: err.Error()}
+	}
+	// 处理获取标准错误输出失败的情况
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return RunResult{Exception: err.Error()}
 	}
@@ -186,16 +189,23 @@ func execPy(path string, input string) RunResult {
 		return RunResult{Exception: err.Error()}
 	}
 	// 将输入数据写入进程的stdin
-	io.WriteString(stdin, input)
-	stdin.Close()
-	elapsed := time.Since(start)
-	output, err := io.ReadAll(stdout)
-	err = cmd.Wait()
-	if err != nil {
+	_, _ = io.WriteString(stdin, input)
+	_ = stdin.Close()
+	var buf bytes.Buffer
+	// 处理 获取标准错误输出失败的情况
+	if _, err := io.Copy(&buf, stderr); err != nil {
 		return RunResult{Exception: err.Error()}
 	}
+	elapsed := time.Since(start)
+	output, err := io.ReadAll(stdout)
+	// 处理执行代码失败
+	if err := cmd.Wait(); err != nil {
+		// 处理py异常信息
+		if buf.Len() > 0 {
+			return RunResult{Exception: buf.String()}
+		}
+	}
 	result := RunResult{
-		Status: "correct",
 		Output: string(output),
 		Time:   elapsed.Seconds(),
 		Memory: 0,
