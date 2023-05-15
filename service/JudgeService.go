@@ -56,11 +56,7 @@ func compile(path, language string) (*exec.Cmd, error) {
 }
 func run(path string, input, language string) (string, float64, error) {
 
-	switch language {
-	case "python":
-
-	}
-	cmd := exec.Command(path, "run", "main1."+language)
+	cmd := exec.Command("./main1")
 	//cmd.SysProcAttr = &syscall.SysProcAttr{
 	//	//// Limit the process to read-only access to the file system.
 	//	//// Ensures that the process cannot write to disk.
