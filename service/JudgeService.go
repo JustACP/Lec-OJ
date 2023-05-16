@@ -51,11 +51,11 @@ func saveCode(code, language string) (string, error) {
 func compile(path, language string) ([]string, error) {
 	switch language {
 	case "go":
-		command := []string{"/root/go/oj/" + path[0:len(path)-4]}
+		command := []string{"/root/go/oj/" + path[0:len(path)-3]}
 		cmd := exec.Command("go", "build", path)
 		err := cmd.Run()
 		os.Chown(path[0:len(path)-4], 0, 0)
-		_ = os.Chmod(path[0:len(path)-4], 0755)
+		_ = os.Chmod(path[0:len(path)-3], 0755)
 		return command, err
 	case "c++":
 		cmd := exec.Command("g++", "-o", path[0:len(path)-4], "-Wall", "-O2", path)
