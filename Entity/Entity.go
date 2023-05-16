@@ -7,10 +7,12 @@ type Response struct {
 
 // ReceiveCodeVo  当中的TestPointsVO 参数的格式应该为 ["1234","456578"]/*
 type ReceiveCodeVo struct {
-	Code         string `form:"code"`
-	TestPointsVO string `form:"testPoints"`
-	TestPoints   []string
-	Language     string `form:"language"`
+	Code          string `form:"code"`
+	TestPointsVO  string `form:"testPoints"`
+	TestPoints    []string
+	Language      string `form:"language"`
+	TimeLimited   int    `json:"timeLimited"`
+	MemoryLimited int    `json:"memoryLimited"`
 }
 
 func (r Response) Fail(message string) (int, interface{}) {

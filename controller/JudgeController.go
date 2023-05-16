@@ -23,6 +23,6 @@ func Controller(h *server.Hertz) {
 		if err != nil {
 			ctx.JSON(Entity.Response{}.Fail("测试点转化错误"))
 		}
-		ctx.JSON(service.Judge(receive))
+		ctx.JSON(service.JudgeHandler(receive))
 	})
 }

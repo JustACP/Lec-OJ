@@ -3,7 +3,9 @@ package service
 import (
 	"bytes"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
+	"log"
 	"oj/Entity"
 	"os"
 	"os/exec"
@@ -36,7 +38,7 @@ func getPrefix(language string) string {
 
 func saveCode(code, language string) (string, error) {
 	language = getPrefix(language)
-	filename := fmt.Sprintf("%s.%s", "main1", language)
+	filename := fmt.Sprintf("%s.%s", uuid.New(), language)
 	path := filepath.Join("./", filename)
 	path += "go"
 	err := os.WriteFile(path, []byte(code), 0644)
@@ -51,22 +53,27 @@ func compile(path, language string) (*exec.Cmd, error) {
 	case "go":
 		cmd := exec.Command("go", "build", path)
 		return cmd, cmd.Run()
+	case "c++":
+		cmp := exec.Command("g++", "")
+		return cmp, cmp.Run()
+
 	}
+
 	return nil, fmt.Errorf("语言类型错误")
 }
 func run(path string, input, language string) (string, float64, error) {
 
 	cmd := exec.Command("./main1")
 	//cmd.SysProcAttr = &syscall.SysProcAttr{
-	//	//// Limit the process to read-only access to the file system.
-	//	//// Ensures that the process cannot write to disk.
-	//	//Chroot: "/sandbox",
-	//	//// Mount a tmpfs filesystem at /sandbox, ensuring that the process cannot read from disk.
-	//	//// Ensures that the process cannot read from disk.
-	//	//MountNamespace: true,
-	//	//// Limit the process to read-only access to /dev, /proc, and /sys.
-	//	//// Ensures that the process cannot see host's kernel information.
-	//	//CloneFlags: syscall.CLONE_NEWNS | syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
+	//	// Limit the process to read-only access to the file system.
+	//	// Ensures that the process cannot write to disk.
+	//	Chroot: "/sandbox",
+	//	// Mount a tmpfs filesystem at /sandbox, ensuring that the process cannot read from disk.
+	//	// Ensures that the process cannot read from disk.
+	//	MountNamespace: true,
+	//	// Limit the process to read-only access to /dev, /proc, and /sys.
+	//	// Ensures that the process cannot see host's kernel information.
+	//	CloneFlags: syscall.CLONE_NEWNS | syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
 	//}
 	// 使用管道将输入数据传递给进程。
 	stdin, err := cmd.StdinPipe()
@@ -131,7 +138,13 @@ func runCode(path, input, language string) (*RunResult, error) {
 	return result, nil
 }
 
-func Judge(vo Entity.ReceiveCodeVo) (int, interface{}) {
+func JudgeHandler(vo Entity.ReceiveCodeVo) (int, interface{}) {
+	CodePath, err := saveCode(vo.Code, vo.Language)
+	if err != nil {
+		return 0, nil
+	}
+	log.Println(CodePath)
+	compile(CodePath, vo.Language)
 	switch vo.Language {
 	case "c++":
 		return cPlusJuegeMent(vo)
