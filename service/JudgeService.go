@@ -45,19 +45,21 @@ func saveCode(code, language string) (string, error) {
 	return filename, nil
 }
 
-func compile(path, language string) []string {
+func compile(path, language string) ([]string, error) {
 	switch language {
 	case "go":
 		command := []string{"go", "build", path[0 : len(path)-3]}
-		return command
+		cmd := exec.Command("go", "build", path)
+		return command, cmd.Run()
 	case "c++":
-		command := []string{"g++", "-o", path[0 : len(path)-4], "-Wall", "-O2", path}
-		return command
+		cmd := exec.Command("g++", "-o", path[0:len(path)-4], "-Wall", "-O2", path)
+		command := []string{"./", path[0 : len(path)-4]}
+		return command, cmd.Run()
 	case "python":
 		command := []string{"python3", path}
-		return command
+		return command, nil
 	}
-	return []string{"语言类型错误"}
+	return nil, fmt.Errorf("语言类型不匹配")
 }
 
 //func run(path string, input, language string) (string, float64, error) {
@@ -122,7 +124,10 @@ func JudgeHandler(vo Entity.ReceiveCodeVo) (int, interface{}) {
 	}
 	defer deleteCode(CodePath)
 	log.Println("create file: " + CodePath)
-	command := compile(CodePath, vo.Language)
+	command, err := compile(CodePath, vo.Language)
+	if err != nil {
+		return Entity.Response{}.Fail(err.Error())
+	}
 	return runCode(vo.TestPoints, command)
 }
 
