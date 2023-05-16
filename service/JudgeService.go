@@ -54,7 +54,8 @@ func compile(path, language string) (*exec.Cmd, string, error) {
 		cmp := exec.Command("g++", "-o", path[0:len(path)-4], "-Wall", "-O2", path)
 		return cmp, "./" + path[0:len(path)-4], cmp.Run()
 	case "python":
-		return nil, "python3 " + path, nil
+		cmd := exec.Command("python3", path)
+		return cmd, "python3 " + path, nil
 	}
 	return nil, "", fmt.Errorf("语言类型错误")
 }
@@ -121,19 +122,18 @@ func JudgeHandler(vo Entity.ReceiveCodeVo) (int, interface{}) {
 	}
 	defer deleteCode(CodePath)
 	log.Println("create file: " + CodePath)
-	_, command, err := compile(CodePath, vo.Language)
+	cmd, command, err := compile(CodePath, vo.Language)
 	if err != nil {
 		return Entity.Response{}.Fail(err.Error())
 	}
-	return runCode(vo.TestPoints, command)
+	return runCode(cmd, vo.TestPoints, command)
 }
 
 func deleteCode(path string) {
 	exec.Command("rm", path)
 }
 
-func execCode(command string, input string) RunResult {
-	cmd := exec.Command(command)
+func execCode(cmd *exec.Cmd, input string) RunResult {
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return RunResult{Exception: err.Error()}
@@ -178,7 +178,7 @@ func execCode(command string, input string) RunResult {
 	}
 	return result
 }
-func runCode(testPoints []string, command string) (int, interface{}) {
+func runCode(cmd *exec.Cmd, testPoints []string, command string) (int, interface{}) {
 	var ans Entity.Response
 	var wg sync.WaitGroup
 	resList := make([]RunResult, 0)
@@ -186,7 +186,7 @@ func runCode(testPoints []string, command string) (int, interface{}) {
 		wg.Add(1)
 		go func(val string, group *sync.WaitGroup) {
 			defer group.Done()
-			res := execCode(command, val)
+			res := execCode(cmd, val)
 			resList = append(resList, res)
 		}(val, &wg)
 	}
