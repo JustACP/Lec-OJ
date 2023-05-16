@@ -139,6 +139,7 @@ func runCode(path, input, language string) (*RunResult, error) {
 }
 
 func JudgeHandler(vo Entity.ReceiveCodeVo) (int, interface{}) {
+	fmt.Println(vo)
 	CodePath, err := saveCode(vo.Code, vo.Language)
 	if err != nil {
 		return 0, nil
