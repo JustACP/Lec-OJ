@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"io"
-	"io/fs"
 	"log"
 	"oj/Entity"
 	"os"
@@ -42,7 +41,7 @@ func getPrefix(language string) string {
 func saveCode(code, language string) (string, error) {
 	language = getPrefix(language)
 	filename := fmt.Sprintf("%s.%s", uuid.New(), language)
-	err := os.WriteFile(filename, []byte(code), fs.ModePerm)
+	err := os.WriteFile(filename, []byte(code), 0644)
 	if err != nil {
 		return "", err
 	}
