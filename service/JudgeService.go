@@ -54,7 +54,7 @@ func compile(path, language string) (*exec.Cmd, string, error) {
 		cmp := exec.Command("g++", "-o", path[0:len(path)-4], "-Wall", "-O2", path)
 		return cmp, "./" + path[0:len(path)-4], cmp.Run()
 	case "python":
-		return nil, "python3 " + path[0:len(path)-3], nil
+		return nil, "python3 " + path, nil
 	}
 	return nil, "", fmt.Errorf("语言类型错误")
 }
