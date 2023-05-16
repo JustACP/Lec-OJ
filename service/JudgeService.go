@@ -45,19 +45,19 @@ func saveCode(code, language string) (string, error) {
 	return filename, nil
 }
 
-func compile(path, language string) (*exec.Cmd, string, error) {
+func compile(path, language string) []string {
 	switch language {
 	case "go":
-		cmd := exec.Command("go", "build", path)
-		return cmd, "./" + path[0:len(path)-3], cmd.Run()
+		command := []string{"go", "build", path[0 : len(path)-3]}
+		return command
 	case "c++":
-		cmp := exec.Command("g++", "-o", path[0:len(path)-4], "-Wall", "-O2", path)
-		return cmp, "./" + path[0:len(path)-4], cmp.Run()
+		command := []string{"g++", "-o", path[0 : len(path)-4], "-Wall", "-O2", path}
+		return command
 	case "python":
-		cmd := exec.Command("python3", path)
-		return cmd, "python3 " + path, nil
+		command := []string{"python3", path}
+		return command
 	}
-	return nil, "", fmt.Errorf("语言类型错误")
+	return []string{"语言类型错误"}
 }
 
 //func run(path string, input, language string) (string, float64, error) {
@@ -122,18 +122,17 @@ func JudgeHandler(vo Entity.ReceiveCodeVo) (int, interface{}) {
 	}
 	defer deleteCode(CodePath)
 	log.Println("create file: " + CodePath)
-	cmd, command, err := compile(CodePath, vo.Language)
-	if err != nil {
-		return Entity.Response{}.Fail(err.Error())
-	}
-	return runCode(cmd, vo.TestPoints, command)
+	command := compile(CodePath, vo.Language)
+	return runCode(vo.TestPoints, command)
 }
 
 func deleteCode(path string) {
 	exec.Command("rm", path)
 }
 
-func execCode(cmd *exec.Cmd, input string) RunResult {
+func execCode(input string, command []string) RunResult {
+	name := command[0]
+	cmd := exec.Command(name, command[1:]...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return RunResult{Exception: err.Error()}
@@ -178,7 +177,7 @@ func execCode(cmd *exec.Cmd, input string) RunResult {
 	}
 	return result
 }
-func runCode(cmd *exec.Cmd, testPoints []string, command string) (int, interface{}) {
+func runCode(testPoints []string, command []string) (int, interface{}) {
 	var ans Entity.Response
 	var wg sync.WaitGroup
 	resList := make([]RunResult, 0)
@@ -186,7 +185,7 @@ func runCode(cmd *exec.Cmd, testPoints []string, command string) (int, interface
 		wg.Add(1)
 		go func(val string, group *sync.WaitGroup) {
 			defer group.Done()
-			res := execCode(cmd, val)
+			res := execCode(val, command)
 			resList = append(resList, res)
 		}(val, &wg)
 	}
