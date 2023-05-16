@@ -48,7 +48,7 @@ func saveCode(code, language string) (string, error) {
 func compile(path, language string) ([]string, error) {
 	switch language {
 	case "go":
-		command := []string{"go", "build", path[0 : len(path)-3]}
+		command := []string{"go", "build", path[0 : len(path)-4]}
 		cmd := exec.Command("go", "build", path)
 		return command, cmd.Run()
 	case "c++":
