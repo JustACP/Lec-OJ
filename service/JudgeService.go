@@ -55,11 +55,13 @@ func compile(path, language string) ([]string, error) {
 		command := []string{"./", path[0 : len(path)-4]}
 		cmd := exec.Command("go", "build", path)
 		err := cmd.Run()
+		os.Chown(path[0:len(path)-4], 0, 0)
 		_ = os.Chmod(path[0:len(path)-4], 0755)
 		return command, err
 	case "c++":
-		cmd := exec.Command("g++", "-o", path[0:len(path)-4], "-Wall", "-O2", path)
+		cmd := exec.Command("g++", "-o", path[0:len(path)-5], "-Wall", "-O2", path)
 		err := cmd.Run()
+		os.Chown(path[0:len(path)-5], 0, 0)
 		_ = os.Chmod(path[0:len(path)-5], 0755)
 		command := []string{"./", path[0 : len(path)-4]}
 		return command, err
