@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/google/uuid"
 	"io"
@@ -9,9 +10,11 @@ import (
 	"oj/Entity"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -71,49 +74,6 @@ func compile(path, language string) ([]string, error) {
 	return nil, fmt.Errorf("语言类型不匹配")
 }
 
-//func run(path string, input, language string) (string, float64, error) {
-//
-//	cmd := exec.Command("./main1")
-//	//cmd.SysProcAttr = &syscall.SysProcAttr{
-//	//	// Limit the process to read-only access to the file system.
-//	//	// Ensures that the process cannot write to disk.
-//	//	Chroot: "/sandbox",
-//	//	// Mount a tmpfs filesystem at /sandbox, ensuring that the process cannot read from disk.
-//	//	// Ensures that the process cannot read from disk.
-//	//	MountNamespace: true,
-//	//	// Limit the process to read-only access to /dev, /proc, and /sys.
-//	//	// Ensures that the process cannot see host's kernel information.
-//	//	CloneFlags: syscall.CLONE_NEWNS | syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID,
-//	//}
-//	// 使用管道将输入数据传递给进程。
-//	stdin, err := cmd.StdinPipe()
-//	if err != nil {
-//		return "", 0, err
-//	}
-//	// 使用管道捕获进程的输出数据。
-//	stdout, err := cmd.StdoutPipe()
-//	if err != nil {
-//		return "", 0, err
-//	}
-//	// 启动流程。
-//	start := time.Now()
-//	if err := cmd.Start(); err != nil {
-//		return "", 0, err
-//	}
-//
-//	// 将输入数据写入进程的stdin
-//	io.WriteString(stdin, input)
-//	stdin.Close()
-//	elapsed := time.Since(start)
-//	// Use bufio.Scanner to read output data.
-//	output, err := io.ReadAll(stdout)
-//	err = cmd.Wait()
-//	if err != nil {
-//		return "", 0, err
-//	}
-//	return string(output), elapsed.Seconds(), nil
-//}
-
 func getUsage(pid int) (string, error) {
 	cmd := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "rss=")
 	var stdout bytes.Buffer
@@ -144,29 +104,35 @@ func deleteCode(path string) {
 	exec.Command("rm", path)
 }
 
-func execCode(input string, command []string) RunResult {
+func execCode(input string, command []string, wg *sync.WaitGroup, ch chan RunResult, num int) {
+	defer wg.Done()
 	name := command[0]
-	// ./文件名
 	cmd := exec.Command(name, command[1:]...)
+
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+	}
+
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return RunResult{Exception: err.Error()}
+		ch <- RunResult{Exception: err.Error()}
 	}
 	// 处理获取标准错误输出失败的情况
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return RunResult{Exception: err.Error()}
+		ch <- RunResult{Exception: err.Error()}
 	}
 	// 使用管道捕获进程的输出数据。
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return RunResult{Exception: err.Error()}
+		ch <- RunResult{Exception: err.Error()}
 	}
 	// 启动流程。
 	start := time.Now()
 	if err := cmd.Start(); err != nil {
-		return RunResult{Exception: err.Error()}
+		ch <- RunResult{Exception: err.Error()}
 	}
+
 	memory, _ := getUsage(cmd.Process.Pid)
 	// 将输入数据写入进程的stdin
 	_, _ = io.WriteString(stdin, input)
@@ -174,7 +140,7 @@ func execCode(input string, command []string) RunResult {
 	var buf bytes.Buffer
 	// 处理 获取标准错误输出失败的情况
 	if _, err := io.Copy(&buf, stderr); err != nil {
-		return RunResult{Exception: err.Error()}
+		ch <- RunResult{Exception: err.Error()}
 	}
 	elapsed := time.Since(start)
 	output, err := io.ReadAll(stdout)
@@ -182,7 +148,7 @@ func execCode(input string, command []string) RunResult {
 	if err := cmd.Wait(); err != nil {
 		// 处理py异常信息
 		if buf.Len() > 0 {
-			return RunResult{Exception: buf.String()}
+			ch <- RunResult{Exception: err.Error()}
 		}
 	}
 	result := RunResult{
@@ -190,21 +156,58 @@ func execCode(input string, command []string) RunResult {
 		Time:   elapsed.Seconds(),
 		Memory: memory,
 	}
-	return result
+	result.Number = num
+	ch <- result
 }
 func runCode(testPoints []string, command []string) (int, interface{}) {
 	var ans Entity.Response
 	var wg sync.WaitGroup
 	resList := make([]RunResult, 0)
-	for _, val := range testPoints {
+	ch := make(chan RunResult, len(testPoints))
+	for num, val := range testPoints {
 		wg.Add(1)
-		go func(val string, group *sync.WaitGroup) {
-			defer group.Done()
-			res := execCode(val, command)
-			resList = append(resList, res)
-		}(val, &wg)
+		go func(val string, num int) {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			var mem runtime.MemStats
+			runtime.ReadMemStats(&mem)
+			maxMemory := 5120000
+			done := make(chan RunResult)
+			defer close(done)
+			if mem.Alloc >= uint64(maxMemory) {
+				ch <- RunResult{Exception: "mle"}
+				return
+			}
+			go execCode(val, command, &wg, done, num)
+			go mempd(&mem, done)
+			select {
+			case <-ctx.Done():
+				ch <- RunResult{Exception: "TLE"}
+			case <-done:
+				ch <- <-done
+			}
+
+		}(val, num)
 	}
 	wg.Wait()
+	for i := range ch {
+		resList = append(resList, i)
+	}
 	ans.Data = resList
 	return 200, ans
+}
+
+func mempd(r *runtime.MemStats, done chan RunResult) {
+	be := time.Now()
+	for true {
+		if time.Since(be).Seconds() < 1 {
+			if r.Alloc >= 5120000 {
+				done <- RunResult{Exception: "mle"}
+			}
+		} else {
+			return
+		}
+	}
+
 }
