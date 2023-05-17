@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -108,10 +107,6 @@ func execCode(input string, command []string, wg *sync.WaitGroup, ch chan RunRes
 	defer wg.Done()
 	name := command[0]
 	cmd := exec.Command(name, command[1:]...)
-
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
-	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
