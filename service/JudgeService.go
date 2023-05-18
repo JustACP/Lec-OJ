@@ -175,7 +175,7 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 	ch := make(chan RunResult, len(testPoints))
 	for num, val := range testPoints {
 		wg.Add(1)
-		go run(val, num, &wg, ch, command)
+		go run(val, num, &wg, &ch, command)
 	}
 	wg.Wait()
 	close(ch)
@@ -185,7 +185,7 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 	ans.Data = resList
 	return 200, ans
 }
-func run(val string, num int, wg *sync.WaitGroup, ch chan RunResult, command []string) {
+func run(val string, num int, wg *sync.WaitGroup, ch *chan RunResult, command []string) {
 	defer wg.Done()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -196,13 +196,13 @@ func run(val string, num int, wg *sync.WaitGroup, ch chan RunResult, command []s
 	go mempd(&mem, &done)
 	select {
 	case <-ctx.Done():
-		ch <- RunResult{Exception: "TLE", Number: num}
+		*ch <- RunResult{Exception: "TLE", Number: num}
 		log.Println(strconv.Itoa(num) + "TLE")
 		return
 	case <-done:
 		faq := <-done
 		faq.Number = num
-		ch <- faq
+		*ch <- faq
 		log.Println(strconv.Itoa(num) + faq.Output)
 		return
 	}
