@@ -51,9 +51,16 @@ func saveCode(code, language string) (string, error) {
 }
 
 func compile(path, language string) ([]string, error) {
+	pwd := exec.Command("pwd")
+	stdout, _ := pwd.StdoutPipe()
+	_ = pwd.Start()
+	locatae, _ := io.ReadAll(stdout)
+	locate := string(locatae)
+	locate, _ = strings.CutSuffix(locate, "\n")
+	locate += "/"
 	switch language {
 	case "go":
-		command := []string{"/root/go/oj/" + path[0:len(path)-3]}
+		command := []string{locate + path[0:len(path)-3]}
 		cmd := exec.Command("go", "build", path)
 		err := cmd.Run()
 		os.Chown(path[0:len(path)-4], 0, 0)
@@ -64,7 +71,7 @@ func compile(path, language string) ([]string, error) {
 		err := cmd.Run()
 		os.Chown(path[0:len(path)-5], 0, 0)
 		_ = os.Chmod(path[0:len(path)-5], 0755)
-		command := []string{"/root/go/oj/" + path[0:len(path)-4]}
+		command := []string{locate + path[0:len(path)-4]}
 		return command, err
 	case "python":
 		command := []string{"python3", path}
@@ -103,29 +110,29 @@ func deleteCode(path string) {
 	exec.Command("rm", path)
 }
 
-func execCode(input string, command []string, wg *sync.WaitGroup, ch chan RunResult, num int) {
+func execCode(input string, command []string, wg *sync.WaitGroup, ch *chan RunResult, num int) {
 	defer wg.Done()
 	name := command[0]
 	cmd := exec.Command(name, command[1:]...)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		ch <- RunResult{Exception: err.Error()}
+		*ch <- RunResult{Exception: err.Error()}
 	}
 	// 处理获取标准错误输出失败的情况
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		ch <- RunResult{Exception: err.Error()}
+		*ch <- RunResult{Exception: err.Error()}
 	}
 	// 使用管道捕获进程的输出数据。
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		ch <- RunResult{Exception: err.Error()}
+		*ch <- RunResult{Exception: err.Error()}
 	}
 	// 启动流程。
 	start := time.Now()
 	if err := cmd.Start(); err != nil {
-		ch <- RunResult{Exception: err.Error()}
+		*ch <- RunResult{Exception: err.Error()}
 	}
 
 	memory, _ := getUsage(cmd.Process.Pid)
@@ -135,7 +142,7 @@ func execCode(input string, command []string, wg *sync.WaitGroup, ch chan RunRes
 	var buf bytes.Buffer
 	// 处理 获取标准错误输出失败的情况
 	if _, err := io.Copy(&buf, stderr); err != nil {
-		ch <- RunResult{Exception: err.Error()}
+		*ch <- RunResult{Exception: err.Error()}
 	}
 	elapsed := time.Since(start)
 	output, err := io.ReadAll(stdout)
@@ -143,7 +150,7 @@ func execCode(input string, command []string, wg *sync.WaitGroup, ch chan RunRes
 	if err := cmd.Wait(); err != nil {
 		// 处理py异常信息
 		if buf.Len() > 0 {
-			ch <- RunResult{Exception: err.Error()}
+			*ch <- RunResult{Exception: err.Error()}
 		}
 	}
 	result := RunResult{
@@ -152,7 +159,7 @@ func execCode(input string, command []string, wg *sync.WaitGroup, ch chan RunRes
 		Memory: memory,
 	}
 	result.Number = num
-	ch <- result
+	*ch <- result
 }
 func runCode(testPoints []string, command []string) (int, interface{}) {
 	var ans Entity.Response
@@ -174,8 +181,8 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 				ch <- RunResult{Exception: "mle"}
 				return
 			}
-			go execCode(val, command, &wg, done, num)
-			go mempd(&mem, done)
+			go execCode(val, command, &wg, &done, num)
+			go mempd(&mem, &done)
 			select {
 			case <-ctx.Done():
 				ch <- RunResult{Exception: "TLE"}
@@ -193,12 +200,12 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 	return 200, ans
 }
 
-func mempd(r *runtime.MemStats, done chan RunResult) {
+func mempd(r *runtime.MemStats, done *chan RunResult) {
 	be := time.Now()
 	for true {
 		if time.Since(be).Seconds() < 1 {
 			if r.Alloc >= 5120000 {
-				done <- RunResult{Exception: "mle"}
+				*done <- RunResult{Exception: "mle"}
 			}
 		} else {
 			return
