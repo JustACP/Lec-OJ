@@ -175,27 +175,7 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 	ch := make(chan RunResult, len(testPoints))
 	for num, val := range testPoints {
 		wg.Add(1)
-		go func(val string, num int, wg *sync.WaitGroup) {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			var mem runtime.MemStats
-			runtime.ReadMemStats(&mem)
-			done := make(chan RunResult, 2)
-			defer close(done)
-			go execCode(val, command, wg, &done, num)
-			go mempd(&mem, &done)
-			select {
-			case <-ctx.Done():
-				ch <- RunResult{Exception: "TLE", Number: num}
-				return
-			case <-done:
-				faq := <-done
-				faq.Number = num
-				ch <- faq
-				return
-			}
-		}(val, num, &wg)
+		go run(val, num, &wg, ch, command)
 	}
 	wg.Wait()
 	close(ch)
@@ -204,6 +184,26 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 	}
 	ans.Data = resList
 	return 200, ans
+}
+func run(val string, num int, wg *sync.WaitGroup, ch chan RunResult, command []string) {
+	defer wg.Done()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	done := make(chan RunResult, 2)
+	go execCode(val, command, wg, &done, num)
+	go mempd(&mem, &done)
+	select {
+	case <-ctx.Done():
+		ch <- RunResult{Exception: "TLE", Number: num}
+		return
+	case <-done:
+		faq := <-done
+		faq.Number = num
+		ch <- faq
+		return
+	}
 }
 
 func mempd(r *runtime.MemStats, done *chan RunResult) {
