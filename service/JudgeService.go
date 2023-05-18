@@ -197,11 +197,13 @@ func run(val string, num int, wg *sync.WaitGroup, ch chan RunResult, command []s
 	select {
 	case <-ctx.Done():
 		ch <- RunResult{Exception: "TLE", Number: num}
+		log.Println(strconv.Itoa(num) + "TLE")
 		return
 	case <-done:
 		faq := <-done
 		faq.Number = num
 		ch <- faq
+		log.Println(strconv.Itoa(num) + faq.Output)
 		return
 	}
 }
