@@ -118,21 +118,25 @@ func execCode(input string, command []string, wg *sync.WaitGroup, ch *chan RunRe
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		*ch <- RunResult{Exception: err.Error()}
+		return
 	}
 	// 处理获取标准错误输出失败的情况
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		*ch <- RunResult{Exception: err.Error()}
+		return
 	}
 	// 使用管道捕获进程的输出数据。
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		*ch <- RunResult{Exception: err.Error()}
+		return
 	}
 	// 启动流程。
 	start := time.Now()
 	if err := cmd.Start(); err != nil {
 		*ch <- RunResult{Exception: err.Error()}
+		return
 	}
 
 	memory, _ := getUsage(cmd.Process.Pid)
@@ -143,14 +147,16 @@ func execCode(input string, command []string, wg *sync.WaitGroup, ch *chan RunRe
 	// 处理 获取标准错误输出失败的情况
 	if _, err := io.Copy(&buf, stderr); err != nil {
 		*ch <- RunResult{Exception: err.Error()}
+		return
 	}
 	elapsed := time.Since(start)
 	output, err := io.ReadAll(stdout)
 	// 处理执行代码失败
 	if err := cmd.Wait(); err != nil {
-		// 处理py异常信息
+		// 处理异常信息
 		if buf.Len() > 0 {
 			*ch <- RunResult{Exception: err.Error()}
+			return
 		}
 	}
 	result := RunResult{
@@ -160,11 +166,13 @@ func execCode(input string, command []string, wg *sync.WaitGroup, ch *chan RunRe
 	}
 	result.Number = num
 	*ch <- result
+	return
 }
 func runCode(testPoints []string, command []string) (int, interface{}) {
+	log.Println("run code")
 	var ans Entity.Response
 	var wg sync.WaitGroup
-	resList := make([]RunResult, 0)
+	resList := make([]RunResult, len(testPoints))
 	ch := make(chan RunResult, len(testPoints))
 	for num, val := range testPoints {
 		wg.Add(1)
@@ -181,18 +189,23 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 				ch <- RunResult{Exception: "mle"}
 				return
 			}
+			var lo sync.WaitGroup
+			lo.Add(1)
 			go execCode(val, command, &wg, &done, num)
 			go mempd(&mem, &done)
 			select {
 			case <-ctx.Done():
 				ch <- RunResult{Exception: "TLE"}
+				return
 			case <-done:
 				ch <- <-done
+				return
 			}
 
 		}(val, num)
 	}
 	wg.Wait()
+	close(ch)
 	for i := range ch {
 		resList = append(resList, i)
 	}
