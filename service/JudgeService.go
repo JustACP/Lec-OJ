@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"io"
 	"log"
 	"oj/Entity"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type RunResult struct {
@@ -171,7 +172,7 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 	log.Println("run code")
 	var ans Entity.Response
 	var wg sync.WaitGroup
-	resList := make([]RunResult, len(testPoints))
+	resList := make([]RunResult, 0)
 	ch := make(chan RunResult, len(testPoints))
 	for num, val := range testPoints {
 		wg.Add(1)
@@ -181,11 +182,13 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 	close(ch)
 	for i := range ch {
 		resList = append(resList, i)
+		// log.Println(resList)
 	}
 	ans.Data = resList
 	return 200, ans
 }
 func run(val string, num int, wg *sync.WaitGroup, ch *chan RunResult, command []string) {
+	defer wg.Done()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	var mem runtime.MemStats
@@ -197,14 +200,11 @@ func run(val string, num int, wg *sync.WaitGroup, ch *chan RunResult, command []
 	case <-ctx.Done():
 		*ch <- RunResult{Exception: "TLE", Number: num}
 		log.Println(strconv.Itoa(num) + "TLE")
-		wg.Done()
 		return
-	case <-done:
-		faq := <-done
+	case faq := <-done:
 		faq.Number = num
 		*ch <- faq
 		log.Println(strconv.Itoa(num) + faq.Output)
-		wg.Done()
 		return
 	}
 }
