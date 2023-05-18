@@ -111,7 +111,6 @@ func deleteCode(path string) {
 }
 
 func execCode(input string, command []string, wg *sync.WaitGroup, ch *chan RunResult, num int) {
-	defer wg.Done()
 	name := command[0]
 	cmd := exec.Command(name, command[1:]...)
 
@@ -176,7 +175,7 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 	ch := make(chan RunResult, len(testPoints))
 	for num, val := range testPoints {
 		wg.Add(1)
-		go func(val string, num int) {
+		go func(val string, num int, wg *sync.WaitGroup) {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
@@ -184,7 +183,7 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 			runtime.ReadMemStats(&mem)
 			done := make(chan RunResult, 2)
 			defer close(done)
-			go execCode(val, command, &wg, &done, num)
+			go execCode(val, command, wg, &done, num)
 			go mempd(&mem, &done)
 			select {
 			case <-ctx.Done():
@@ -196,7 +195,7 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 				ch <- faq
 				return
 			}
-		}(val, num)
+		}(val, num, &wg)
 	}
 	wg.Wait()
 	close(ch)
