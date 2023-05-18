@@ -186,7 +186,6 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 	return 200, ans
 }
 func run(val string, num int, wg *sync.WaitGroup, ch *chan RunResult, command []string) {
-	defer wg.Done()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	var mem runtime.MemStats
@@ -198,12 +197,14 @@ func run(val string, num int, wg *sync.WaitGroup, ch *chan RunResult, command []
 	case <-ctx.Done():
 		*ch <- RunResult{Exception: "TLE", Number: num}
 		log.Println(strconv.Itoa(num) + "TLE")
+		wg.Done()
 		return
 	case <-done:
 		faq := <-done
 		faq.Number = num
 		*ch <- faq
 		log.Println(strconv.Itoa(num) + faq.Output)
+		wg.Done()
 		return
 	}
 }
