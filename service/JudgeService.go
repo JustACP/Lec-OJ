@@ -182,26 +182,22 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 			defer cancel()
 			var mem runtime.MemStats
 			runtime.ReadMemStats(&mem)
-			maxMemory := 5120000
-			done := make(chan RunResult)
+			done := make(chan RunResult, 2)
 			defer close(done)
-			if mem.Alloc >= uint64(maxMemory) {
-				ch <- RunResult{Exception: "mle"}
-				return
-			}
 			var lo sync.WaitGroup
 			lo.Add(1)
 			go execCode(val, command, &wg, &done, num)
 			go mempd(&mem, &done)
 			select {
 			case <-ctx.Done():
-				ch <- RunResult{Exception: "TLE"}
+				ch <- RunResult{Exception: "TLE", Number: num}
 				return
 			case <-done:
-				ch <- <-done
+				faq := <-done
+				faq.Number = num
+				ch <- faq
 				return
 			}
-
 		}(val, num)
 	}
 	wg.Wait()
@@ -216,7 +212,7 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 func mempd(r *runtime.MemStats, done *chan RunResult) {
 	be := time.Now()
 	for true {
-		if time.Since(be).Seconds() < 1 {
+		if time.Since(be).Seconds() < 1.00 {
 			if r.Alloc >= 5120000 {
 				*done <- RunResult{Exception: "mle"}
 			}
