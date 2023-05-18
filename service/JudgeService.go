@@ -193,7 +193,7 @@ func run(val string, num int, wg *sync.WaitGroup, ch *chan RunResult, command []
 	runtime.ReadMemStats(&mem)
 	done := make(chan RunResult, 2)
 	go execCode(val, command, wg, &done, num)
-	go mempd(&mem, &done)
+	go MemoryMonitor(&mem, &done)
 	select {
 	case <-ctx.Done():
 		*ch <- RunResult{Exception: "TLE", Number: num}
@@ -208,12 +208,13 @@ func run(val string, num int, wg *sync.WaitGroup, ch *chan RunResult, command []
 	}
 }
 
-func mempd(r *runtime.MemStats, done *chan RunResult) {
+func MemoryMonitor(r *runtime.MemStats, done *chan RunResult) {
 	be := time.Now()
 	for true {
 		if time.Since(be).Seconds() < 1.00 {
 			if r.Alloc >= 5120000 {
 				*done <- RunResult{Exception: "mle"}
+				return
 			}
 		} else {
 			return
