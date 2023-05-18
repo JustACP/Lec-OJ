@@ -184,8 +184,6 @@ func runCode(testPoints []string, command []string) (int, interface{}) {
 			runtime.ReadMemStats(&mem)
 			done := make(chan RunResult, 2)
 			defer close(done)
-			var lo sync.WaitGroup
-			lo.Add(1)
 			go execCode(val, command, &wg, &done, num)
 			go mempd(&mem, &done)
 			select {
